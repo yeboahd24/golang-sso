@@ -1,0 +1,13 @@
+database:
+  host: "localhost"
+  user: "postgres"
+  password: "mesika"
+  name: "grpc"
+
+oauth:
+  client_id: ""
+  client_secret: ""
+  redirect_url: "http://127.0.0.1:8080/social/complete/google-oauth2/"
+
+session:
+  secret: "iXmSoWptSDuw5kI7/LWP1KWOcOulbfdzGdesOuRBSF4="

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - SSO Authentication</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-sm w-full">
+        <!-- Card -->
+        <div class="bg-white rounded-2xl shadow-xl p-8">
+            <!-- Logo/Brand -->
+            <div class="flex justify-center mb-8">
+                <!-- Example logo placeholder - replace with your own -->
+                <div class="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Welcome Text -->
+            <div class="text-center mb-8">
+                <h1 class="text-2xl font-bold text-gray-800">Welcome back</h1>
+                <p class="text-gray-500 mt-2">Sign in to your account</p>
+            </div>
+
+            <!-- SSO Button -->
+            <a href="/api/auth/sso" class="block w-full bg-blue-600 hover:bg-blue-700 text-white text-center py-3 px-4 rounded-lg transition duration-200 mb-4">
+                Continue with SSO
+            </a>
+
+            <!-- Session Status -->
+            <div id="status" class="hidden mt-4 p-4 rounded-lg text-center"></div>
+
+            <!-- Additional Actions -->
+            <div class="mt-6 space-y-3">
+                <button onclick="verifySession()" class="w-full px-4 py-3 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition duration-200">
+                    Check Session Status
+                </button>
+                
+                <button onclick="logout()" class="w-full px-4 py-3 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition duration-200">
+                    Sign Out
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <p class="text-center text-gray-500 text-sm mt-8">
+            Protected by enterprise-grade security
+        </p>
+    </div>
+
+    <script>
+        function showStatus(message, type = 'success') {
+            const status = document.getElementById('status');
+            status.classList.remove('hidden');
+            status.classList.remove('bg-green-50', 'bg-red-50', 'text-green-700', 'text-red-700');
+            
+            if (type === 'success') {
+                status.classList.add('bg-green-50', 'text-green-700');
+            } else {
+                status.classList.add('bg-red-50', 'text-red-700');
+            }
+            
+            status.textContent = message;
+        }
+
+        async function verifySession() {
+            try {
+                const response = await fetch('/api/auth/verify', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    showStatus('Your session is active');
+                } else {
+                    showStatus('Please sign in again', 'error');
+                }
+            } catch (error) {
+                showStatus('Unable to verify session', 'error');
+            }
+        }
+
+        async function logout() {
+            try {
+                const response = await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    showStatus('Successfully signed out');
+                    setTimeout(() => window.location.href = '/', 1500);
+                } else {
+                    showStatus('Unable to sign out', 'error');
+                }
+            } catch (error) {
+                showStatus('Connection error', 'error');
+            }
+        }
+    </script>
+</body>
+</html>
