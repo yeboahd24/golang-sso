@@ -18,7 +18,7 @@ https://github.com/yeboahd24/golang-sso.git
 2. Change into the project directory:
 
 ```bash
-cd sso
+cd golang-sso
 ```
 
 3. Install dependencies:
