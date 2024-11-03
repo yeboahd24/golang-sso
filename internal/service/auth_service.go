@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -44,11 +45,12 @@ type UserInfo struct {
 	Name          string `json:"name"`
 	VerifiedEmail bool   `json:"verified_email"`
 	Picture       string `json:"picture"`
-	HD            string `json:"hd"` // G Suite hosted domain
+	HD            string `json:"hd"`  // G Suite hosted domain
+	Sub           string `json:"sub"` // Google's unique identifier for the user
 }
 
 type AuthService interface {
-	HandleCallback(ctx context.Context, code, state string) (*model.User, error)
+	HandleCallback(ctx context.Context, code string) (*model.User, error)
 	VerifySession(ctx context.Context, userID uint) (*model.User, error)
 	GetAuthURL(state string) string
 }
@@ -82,61 +84,46 @@ func NewAuthService(userRepo repository.UserRepository, oauth2Config *oauth2.Con
 	}
 }
 
-func (s *authService) HandleCallback(ctx context.Context, code, state string) (*model.User, error) {
-	// Exchange code for token with context
-	token, err := s.oauth2Config.Exchange(ctx, code)
+// internal/service/auth_service.go
+func (s *authService) HandleCallback(ctx context.Context, code string) (*model.User, error) {
+	// Get user info using the OAuth flow
+	userInfo, err := s.getOAuthUserInfo(code)
 	if err != nil {
-		return nil, &AuthError{
-			Code:    ErrTokenExchangeFailed,
-			Message: "Failed to exchange authorization code for token",
-			Err:     err,
-		}
+		log.Printf("Failed to get user info: %v", err)
+		return nil, err
 	}
+	log.Printf("User info received: %+v", userInfo)
 
-	// Validate token
-	if !token.Valid() {
-		return nil, &AuthError{
-			Code:    ErrInvalidToken,
-			Message: "Invalid or expired token",
-		}
-	}
-
-	// Get user info with context
-	userInfo, err := s.getUserInfo(ctx, token.AccessToken)
-	if err != nil {
-		return nil, err // Error is already wrapped
-	}
-
-	// Validate email verification
-	if !userInfo.VerifiedEmail {
-		return nil, &AuthError{
-			Code:    ErrUnverifiedEmail,
-			Message: "Email address is not verified by Google",
-		}
-	}
-
-	// Validate email domain
 	if !strings.HasSuffix(userInfo.Email, "@mesika.org") {
+		log.Printf("Unauthorized email domain: %s", userInfo.Email)
 		return nil, &AuthError{
-			Code: ErrInvalidDomain,
-			Message: fmt.Sprintf("Invalid email domain. Expected @mesika.org, got %s",
-				strings.Split(userInfo.Email, "@")[1]),
+			Code:    ErrInvalidDomain,
+			Message: "Only @mesika.org email addresses are allowed",
 		}
 	}
 
-	// Create or update user
+	// First check if user exists
+	existingUser, err := s.userRepo.FindByEmail(userInfo.Email)
+	if err != nil {
+		return nil, fmt.Errorf("error checking existing user: %w", err)
+	}
+
 	user := &model.User{
 		Email:     userInfo.Email,
 		Name:      userInfo.Name,
+		SSOID:     userInfo.Sub,
+		Role:      "user",
 		LastLogin: time.Now(),
 	}
 
+	if existingUser != nil {
+		// Update existing user
+		user.ID = existingUser.ID               // Set the ID for update
+		user.CreatedAt = existingUser.CreatedAt // Preserve creation time
+	}
+
 	if err := s.userRepo.CreateOrUpdate(user); err != nil {
-		return nil, &AuthError{
-			Code:    ErrUserCreationFailed,
-			Message: "Failed to create or update user record",
-			Err:     err,
-		}
+		return nil, fmt.Errorf("failed to create/update user: %w", err)
 	}
 
 	return user, nil
@@ -211,4 +198,19 @@ func (s *authService) VerifySession(ctx context.Context, userID uint) (*model.Us
 
 func (s *authService) GetAuthURL(state string) string {
 	return s.oauth2Config.AuthCodeURL(state, oauth2.AccessTypeOnline)
+}
+
+func (s *authService) getOAuthUserInfo(code string) (*UserInfo, error) {
+	// Exchange code for token
+	token, err := s.oauth2Config.Exchange(context.Background(), code)
+	if err != nil {
+		return nil, &AuthError{
+			Code:    ErrTokenExchangeFailed,
+			Message: "Failed to exchange auth code for token",
+			Err:     err,
+		}
+	}
+
+	// Get user info using the access token
+	return s.getUserInfo(context.Background(), token.AccessToken)
 }

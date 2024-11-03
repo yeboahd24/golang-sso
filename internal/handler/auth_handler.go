@@ -2,7 +2,9 @@
 package handler
 
 import (
+	"log"
 	"net/http"
+	"net/url"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -28,15 +30,13 @@ func NewAuthHandler(authService service.AuthService) *AuthHandler {
 func (h *AuthHandler) InitiateSSO(c *gin.Context) {
 	state := util.GenerateRandomState()
 	session := sessions.Default(c)
+
+	// Store both raw and encoded state
 	session.Set("state", state)
-	session.Options(sessions.Options{
-		Path:     "/",
-		MaxAge:   300, // 5 minutes
-		Secure:   true,
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-	})
+	session.Set("encoded_state", url.QueryEscape(state))
+
 	if err := session.Save(); err != nil {
+		log.Printf("Failed to save session: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    "SESSION_ERROR",
 			Message: "Failed to save session",
@@ -44,15 +44,47 @@ func (h *AuthHandler) InitiateSSO(c *gin.Context) {
 		return
 	}
 
+	// Debug session after saving
+	log.Printf("Session ID: %v", session.Get("state"))
+	log.Printf("Stored state: %v", state)
+	log.Printf("Encoded state: %v", url.QueryEscape(state))
+
 	url := h.authService.GetAuthURL(state)
 	c.Redirect(http.StatusTemporaryRedirect, url)
 }
+
+// func (h *AuthHandler) InitiateSSO(c *gin.Context) {
+// 	state := util.GenerateRandomState()
+// 	session := sessions.Default(c)
+// 	session.Clear()
+// 	session.Set("state", state)
+// 	session.Options(sessions.Options{
+// 		Path:     "/",
+// 		MaxAge:   300, // 5 minutes
+// 		Secure:   true,
+// 		HttpOnly: true,
+// 		SameSite: http.SameSiteStrictMode,
+// 	})
+// 	if err := session.Save(); err != nil {
+// 		c.JSON(http.StatusInternalServerError, ErrorResponse{
+// 			Code:    "SESSION_ERROR",
+// 			Message: "Failed to save session",
+// 		})
+// 		return
+// 	}
+// 	fmt.Printf("Stored state in session: %v\n", state)
+// 	url := h.authService.GetAuthURL(state)
+// 	c.Redirect(http.StatusTemporaryRedirect, url)
+// }
 
 func (h *AuthHandler) Callback(c *gin.Context) {
 	session := sessions.Default(c)
 	state := session.Get("state")
 
+	log.Printf("Received state: %s, Expected state: %v", c.Query("state"), state)
+
 	if state != c.Query("state") {
+		log.Printf("State mismatch: received=%s, expected=%v", c.Query("state"), state)
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Code:    "INVALID_STATE",
 			Message: "Invalid state parameter",
@@ -64,11 +96,14 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 	session.Delete("state")
 	session.Save()
 
-	user, err := h.authService.HandleCallback(c.Request.Context(), c.Query("code"), c.Query("state"))
+	log.Printf("OAuth callback received. Code: %s", c.Query("code"))
+	user, err := h.authService.HandleCallback(c.Request.Context(), c.Query("code"))
 	if err != nil {
+		log.Printf("HandleCallback error: %T - %+v", err, err)
 		// Type assert to get our custom error
 		if authErr, ok := err.(*service.AuthError); ok {
 			status := getStatusCodeForError(authErr.Code)
+			log.Printf("Auth error: code=%s, message=%s", authErr.Code, authErr.Message)
 			c.JSON(status, ErrorResponse{
 				Code:    authErr.Code,
 				Message: authErr.Message,
@@ -76,9 +111,10 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 			return
 		}
 
+		log.Printf("Callback error details: %+v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Code:    "UNKNOWN_ERROR",
-			Message: "An unexpected error occurred",
+			Code:    "INVALID_USER_DATA",
+			Message: "Missing required user information from OAuth provider",
 		})
 		return
 	}
