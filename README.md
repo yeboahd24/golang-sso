@@ -14,6 +14,7 @@
 ```bash
 https://github.com/yeboahd24/golang-sso.git
 ```
+![image](images/sso.png)
 
 2. Change into the project directory:
 
