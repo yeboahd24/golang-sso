@@ -1,38 +1,27 @@
-# SSO
+# Golang SSO (Single Sign-On) Service
 
-## Getting Started
+A robust Single Sign-On service built with Go, leveraging OAuth2 for authentication with Google.
 
-### Prerequisites
+![SSO Architecture](images/sso.png)
+
+## Features
+
+- OAuth2 authentication with Google
+- Session management
+- User creation and updates
+- Secure cookie handling
+- Domain-specific email validation (@mesika.org)
+- Clean architecture with separation of concerns
+
+## Prerequisites
 
 - Go 1.18+
 - PostgreSQL 13+
+- Google OAuth2 credentials
 
-### Installation
+## Installation
 
 1. Clone the repository:
-
-```bash
-https://github.com/yeboahd24/golang-sso.git
-```
-![image](images/sso.png)
-
-2. Change into the project directory:
-
-```bash
-cd golang-sso
-```
-
-3. Install dependencies:
-
-```bash
-go mod download
-```
-
-4. Create a new PostgreSQL database and user:
-
-```bash
-createdb sso
-createuser -P sso
-```
-
-5. Update the `config/config.yml` file with your database connection details.
+   ```bash
+   git clone https://github.com/yeboahd24/golang-sso.git
+   cd golang-sso
